@@ -110,7 +110,7 @@ class CUDA_build_ext(build_ext):
         spawn(cmd, search_path, verbose, dry_run)
 
 setup(name="cudamat",
-      version="0.3",
+      version="0.3circus",
       description="Performs linear algebra computation on the GPU via CUDA",
       ext_modules=[cudamat_ext, cudalearn_ext],
       packages=find_packages(exclude=['examples', 'test']),

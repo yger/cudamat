@@ -45,6 +45,7 @@ __global__ void kGreaterThanScalar(float* mat, float val, float* target, unsigne
 __global__ void kEquals(float* mat1, float* mat2, float* target, unsigned int len);
 __global__ void kEqualsScalar(float* mat, float val, float* target, unsigned int len);
 __global__ void kMinimum(float* mat1, float* mat2, float* target, unsigned int len);
+__global__ void kSparseDot(int m, int n, int k, float *data, int* indptr, int* indices, float *dense_data, float* target, float beta, float alpha);
 __global__ void kMinimumScalar(float* mat, float val, float* target, unsigned int len);
 __global__ void kMaximum(float* mat1, float* mat2, float* target, unsigned int len);
 __global__ void kMaximumScalar(float* mat, float val, float* target, unsigned int len);
@@ -89,4 +90,5 @@ __global__ void kSelectRows(float* source, float* target, float* indices, int nR
 __global__ void kSetSelectedRows(float* target, float* source, float* indices, int nRowIs, int nCols, int nTargetRows);
 __global__ void kWhere(float* condition_mat, float* if_mat, float* else_mat, float* target, unsigned int len);
 __global__ void kCorrelate(float* source, float* kernel, float* dest, int width, int height, int fwidth, int fheight);
+
 #endif
