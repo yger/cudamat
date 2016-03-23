@@ -5,6 +5,7 @@ import sysconfig
 
 import ctypes as ct
 import numpy as np
+import scipy.sparse as sp
 
 def load_library(basename):
     if platform.system() == 'Windows':
@@ -158,6 +159,21 @@ class rnd_struct(ct.Structure):
     _fields_ = [('dev_rnd_mults', ct.POINTER(ct.c_uint)),
                 ('dev_rnd_words', ct.POINTER(ct.c_longlong))]
 
+class sparse_data(ct.Structure):
+    _fields_ = [('indptr', ct.POINTER(ct.c_int)),
+                ('indices', ct.POINTER(ct.c_int)),
+                ('data', ct.POINTER(ct.c_float))]
+
+class cudamat_sparse(ct.Structure):
+    _fields_ = [('data_host', sparse_data),
+                ('data_device', sparse_data),
+                ('on_device', ct.c_int),
+                ('on_host', ct.c_int),
+                ('size', ct.c_int * 2),
+                ('is_trans', ct.c_int),
+                ('owns_data', ct.c_int),
+                ('nnz', ct.c_int)]
+
 
 class TransposedCUDAMatrix(object):
     def __init__(self, mat):
@@ -165,6 +181,46 @@ class TransposedCUDAMatrix(object):
         ct.memmove(ct.pointer(self.mat), ct.pointer(mat), ct.sizeof(self.mat))
         self.mat.is_trans = 1
         self.p_mat = ct.pointer(self.mat)
+
+
+class SparseCUDAMatrix(object):
+    """ A SparseCUDAMatrix object represents a scipy.sparse.csr matrix of single
+    precision floats on a GPU.
+    """
+    def __init__(self, array, copy_to_device = True):
+        """
+        Initializes a new matrix object in one of two ways. If array is a numpy
+        ndarray, memory for a matrix with the same dimensions is allocated on
+        the GPU. If the copy_to_device flag is set to True, the GPU matrix is
+        initialized with the given ndarray. If array is not an ndarray, it must
+        be a cudamat structure (typically the user will never use this way of
+        calling __init__).
+        """
+
+        assert(type(array) == sp.csr_matrix)
+        self.mat = cudamat_sparse()
+        self.size = self.mat.size
+        self.p_mat = ct.pointer(self.mat)
+        self.scipy_array = array.astype('float32')
+
+        _cudamat.init_from_sparse_array(self.p_mat,
+                                        self.scipy_array.data.ctypes.data_as(ct.POINTER(ct.c_float)),
+                                        self.scipy_array.indices.ctypes.data_as(ct.POINTER(ct.c_int)),
+                                        self.scipy_array.indptr.ctypes.data_as(ct.POINTER(ct.c_int)),
+                                        ct.c_int(self.scipy_array.shape[0]), ct.c_int(self.scipy_array.shape[1]),
+                                        ct.c_int(self.scipy_array.nnz))
+        if copy_to_device:
+          err_code = _cudamat.copy_sparse_to_device(self.p_mat)
+          if err_code:
+            raise generate_exception(err_code)
+
+        # Keep a reference to free device memory in case of a crash.
+        self.__free_device_memory = _cudamat.free_device_memory
+
+    @property
+    def shape(self):
+        return self.mat.size[0], self.mat.size[1]
+
 
 
 class CUDAMatrix(object):
@@ -1239,6 +1295,17 @@ def mean(mat, axis, target=None):
 
     return sum(mat, axis, target=target, mult=1. / mat.shape[axis])
 
+def sparse_dot(sparse_mat, dense_mat, mult=1.0, target = None):
+    if not target:
+        m = sparse_mat.shape[0]
+        n = dense_mat.shape[1]
+        target = empty((m, n))
+
+    err_code = _cudamat.sparse_dot(sparse_mat.p_mat, dense_mat.p_mat, target.p_mat, ct.c_float(0.), ct.c_float(mult))
+    if err_code:
+        raise generate_exception(err_code)
+
+    return target
 
 def dot(m1, m2, target=None, beta=0., alpha=1.):
     """
