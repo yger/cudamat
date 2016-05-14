@@ -169,20 +169,96 @@ __global__ void kEqualsScalar(float* mat, float val, float* target, unsigned int
 }
 
 __global__ void kSparseDot(int m, int n, int k, float *data, int* indptr, int* indices, float *dense_data, float* target, float beta, float alpha) {
+  
   const unsigned int row = blockIdx.x * blockDim.x + threadIdx.x;
   const unsigned int col = blockIdx.y * blockDim.y + threadIdx.y;
-
   if (row < m && col < n) {
     const int start = indptr[row];
     const int end = indptr[row + 1];
-    float sum = 0.f;
+    float sum = 0;
     for (int i = start; i < end; i++) {
       sum += data[i]  * dense_data[col * k + indices[i]];
     }
     const int pos = col * m + row;
     target[pos] = alpha * sum + ((beta == 0) ? 0 : beta * target[pos]);
   }
+  
+   /*
+    const int WARP_SIZE  = 8;
+    const int BLOCK_SIZE = COPY_BLOCK_SIZE;
+    __shared__ float sdata[BLOCK_SIZE];
+    __shared__ int ptrs[BLOCK_SIZE/WARP_SIZE][2];
+    
+    const int thread_id   = BLOCK_SIZE * blockIdx.x + threadIdx.x;  // global thread index
+    const int thread_lane = threadIdx.x & (WARP_SIZE-1);            // thread index within the warp
+    const int warp_id     = thread_id   / WARP_SIZE;                // global warp index
+    const int warp_lane   = threadIdx.x / WARP_SIZE;                // warp index within the CTA
+    const int num_warps   = (BLOCK_SIZE / WARP_SIZE) * gridDim.x;   // total number of active warps
+    const unsigned int col = blockIdx.y * blockDim.y;
+
+    for(int row = warp_id; row < m; row += num_warps){
+        // use two threads to fetch indptr[row] and indptr[row+1]
+        // this is considerably faster than the more straightforward option
+        if(thread_lane < 2)
+            ptrs[warp_lane][thread_lane] = indptr[row + thread_lane];
+        const int row_start = ptrs[warp_lane][0]; //same as: row_start = indptr[row];
+        const int row_end   = ptrs[warp_lane][1]; //same as: row_end   = indptr[row+1];
+
+        // compute local sum
+        sdata[threadIdx.x] = 0;
+        for(int jj = row_start + thread_lane; jj < row_end; jj += WARP_SIZE)
+            sdata[threadIdx.x] += data[jj] * dense_data[col * k + indices[jj]];
+
+        // reduce local sums to row sum (ASSUME: warpsize 32)
+        //if (thread_lane < 16) { sdata[threadIdx.x] += sdata[threadIdx.x + 16]; }
+        //if (thread_lane <  8) { sdata[threadIdx.x] += sdata[threadIdx.x +  8]; }
+        if (thread_lane <  4) { sdata[threadIdx.x] += sdata[threadIdx.x +  4]; }
+        if (thread_lane <  2) { sdata[threadIdx.x] += sdata[threadIdx.x +  2]; }
+        if (thread_lane <  1) { sdata[threadIdx.x] += sdata[threadIdx.x +  1]; }
+
+        // first thread writes warp result
+        const int pos = col * m + row;
+        if (thread_lane == 0)
+            target[pos] = alpha * sdata[threadIdx.x] + ((beta == 0) ? 0 : beta * sdata[pos]);
+    }
+    */
+    
+    /*
+    __shared__ float vals[COPY_BLOCK_SIZE];
+    int thread_id = blockDim.x * blockIdx.x + threadIdx.x ; // global thread index
+    int warp_id = thread_id / COPY_BLOCK_SIZE; // global warp index
+    int lane = thread_id & (COPY_BLOCK_SIZE - 1); // thread index within the warp
+    const unsigned int col = blockIdx.y * blockDim.y + threadIdx.y;
+
+    // one warp per row
+    int row = warp_id ;
+    
+    if ( row < m && col < n ) {
+        int row_start = indptr[row];
+        int row_end = indptr[row + 1];
+
+        // compute running sum per thread
+        vals[threadIdx.x] = 0;
+        for ( int jj = row_start + lane ; jj < row_end ; jj += COPY_BLOCK_SIZE)
+            vals[threadIdx.x] += data[jj] * dense_data[col * k + indices[jj]];
+
+        // parallel reduction in shared memory
+        if (lane < 8) vals[threadIdx.x] += vals[threadIdx.x + 8];
+        if (lane < 4) vals[threadIdx.x] += vals[threadIdx.x + 4];
+        if (lane < 2) vals[threadIdx.x] += vals[threadIdx.x + 2];
+        if (lane < 1) vals[threadIdx.x] += vals[threadIdx.x + 1];
+        
+        // first thread writes the result
+
+        const int pos = col * m + row;
+
+        if (lane == 0)
+            target[pos] = alpha * vals[threadIdx.x] + ((beta == 0) ? 0 : beta * target[pos]);
+    }
+    */
+
 }
+
 
 __global__ void kMinimum(float* mat1, float* mat2, float* target, unsigned int len) {
     const unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -800,15 +876,15 @@ __global__ void kWhere(float* condition_mat, float* if_mat, float* else_mat, flo
 
 
 __global__ void kPdist(float *source, float *target, int n, int m){
-    __shared__ float Ys[16][16];
-    __shared__ float Xs[16][16];
+    __shared__ float Ys[COPY_BLOCK_SIZE][COPY_BLOCK_SIZE];
+    __shared__ float Xs[COPY_BLOCK_SIZE][COPY_BLOCK_SIZE];
     int bx = blockIdx.x, by = blockIdx.y;
     int tx = threadIdx.x, ty = threadIdx.y;
-    int yBegin = by * 16 * m;
-    int xBegin = bx * 16 * m;
+    int yBegin = by * COPY_BLOCK_SIZE * m;
+    int xBegin = bx * COPY_BLOCK_SIZE * m;
     int yEnd = yBegin + m - 1, y, x, k, o;
     float tmp, s = 0;
-    for(y=yBegin,x=xBegin; y<=yEnd; y+=16,x+=16){
+    for(y=yBegin,x=xBegin; y<=yEnd; y+=COPY_BLOCK_SIZE,x+=COPY_BLOCK_SIZE){
         Ys[ty][tx] = source[y + ty*m + tx];
         Xs[tx][ty] = source[x + ty*m + tx];
 
@@ -816,13 +892,13 @@ __global__ void kPdist(float *source, float *target, int n, int m){
 
         __syncthreads();
 
-        for(k=0; k<16; k++){
+        for(k=0; k<COPY_BLOCK_SIZE; k++){
             tmp = Ys[ty][k] - Xs[k][tx];
             s += tmp*tmp;
         }
         __syncthreads();
     }
 
-    o = by*16*n + ty*n + bx*16 + tx;
+    o = by*COPY_BLOCK_SIZE*n + ty*n + bx*COPY_BLOCK_SIZE + tx;
     target[o] = sqrtf(s);
 }

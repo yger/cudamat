@@ -493,8 +493,16 @@ EXPORT int pdist(cudamat* source, cudamat* target) {
     if (source->is_trans)
         return ERROR_TRANSPOSED;
 
-    dim3 gridDim(n/16, n/16);
-    dim3 blockDim(16, 16);
+    unsigned int grid_x = m / COPY_BLOCK_SIZE;
+    if (m % COPY_BLOCK_SIZE)
+        grid_x++;
+
+    unsigned int grid_y = n / COPY_BLOCK_SIZE;
+    if (n % COPY_BLOCK_SIZE)
+        grid_y++;
+
+    dim3 gridDim(grid_x,  grid_y);
+    dim3 blockDim(COPY_BLOCK_SIZE, COPY_BLOCK_SIZE);
 
     kPdist<<<gridDim, blockDim>>>(source->data_device, target->data_device, n, m);
 
