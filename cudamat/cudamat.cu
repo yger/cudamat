@@ -494,17 +494,11 @@ EXPORT int pdist(cudamat* source, cudamat* target) {
         return ERROR_TRANSPOSED;
 
     unsigned int grid_x = n / COPY_BLOCK_SIZE;
-    if (n % COPY_BLOCK_SIZE)
-        grid_x++;
 
-    unsigned int grid_y = m / COPY_BLOCK_SIZE;
-    if (m % COPY_BLOCK_SIZE)
-        grid_y++;
-
-    dim3 gridDim(grid_x,  grid_y);
+    dim3 grid(grid_x,  grid_x);
     dim3 blockDim(COPY_BLOCK_SIZE, COPY_BLOCK_SIZE);
 
-    kPdist<<<gridDim, blockDim>>>(source->data_device, target->data_device, n, m);
+    kPdist<<<grid, blockDim>>>(source->data_device, target->data_device, n, m);
 
     if (check_cublas_error())
         return CUBLAS_ERROR;

@@ -801,6 +801,7 @@ __global__ void kWhere(float* condition_mat, float* if_mat, float* else_mat, flo
 
 
 __global__ void kPdist(float *source, float *target, int n, int m){
+
     __shared__ float Ys[COPY_BLOCK_SIZE][COPY_BLOCK_SIZE];
     __shared__ float Xs[COPY_BLOCK_SIZE][COPY_BLOCK_SIZE];
     int bx = blockIdx.x, by = blockIdx.y;
