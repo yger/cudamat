@@ -190,7 +190,7 @@ class SparseCUDAMatrix(object):
     """ A SparseCUDAMatrix object represents a scipy.sparse.csr matrix of single
     precision floats on a GPU.
     """
-    def __init__(self, array, copy_to_device = True):
+    def __init__(self, array, copy_to_device = True, copy_on_host=True):
         """
         Initializes a new matrix object in one of two ways. If array is a numpy
         ndarray, memory for a matrix with the same dimensions is allocated on
@@ -216,6 +216,9 @@ class SparseCUDAMatrix(object):
           err_code = _cudamat.copy_sparse_to_device(self.p_mat)
           if err_code:
             raise generate_exception(err_code)
+
+        if not copy_on_host:
+            del self.scipy_array
 
         # Keep a reference to free device memory in case of a crash.
         self.__free_device_memory = _cudamat.free_device_memory
@@ -264,6 +267,9 @@ class CUDAMatrix(object):
                 err_code = _cudamat.copy_to_device(self.p_mat)
                 if err_code:
                     raise generate_exception(err_code)
+
+            if not copy_on_host:
+                del self.numpy_array
 
         else:
             # Initialize based on existing cudamat structure.
