@@ -798,33 +798,3 @@ __global__ void kWhere(float* condition_mat, float* if_mat, float* else_mat, flo
         target[i] = condition_mat[i] ? if_mat[i] : else_mat[i];
     }
 }
-
-
-__global__ void kPdist(float *source, float *target, int n, int m){
-
-    __shared__ float Ys[COPY_BLOCK_SIZE][COPY_BLOCK_SIZE];
-    __shared__ float Xs[COPY_BLOCK_SIZE][COPY_BLOCK_SIZE];
-    int bx = blockIdx.x, by = blockIdx.y;
-    int tx = threadIdx.x, ty = threadIdx.y;
-    int yBegin = by * COPY_BLOCK_SIZE * m;
-    int xBegin = bx * COPY_BLOCK_SIZE * m;
-    int yEnd = yBegin + m - 1, y, x, k, o;
-    float tmp, s = 0;
-    for(y=yBegin,x=xBegin; y<=yEnd; y+=COPY_BLOCK_SIZE,x+=COPY_BLOCK_SIZE){
-        Ys[ty][tx] = source[y + ty*m + tx];
-        Xs[tx][ty] = source[x + ty*m + tx];
-
-        //*** note the transpose of Xs
-
-        __syncthreads();
-
-        for(k=0; k<COPY_BLOCK_SIZE; k++){
-            tmp = Ys[ty][k] - Xs[k][tx];
-            s += tmp*tmp;
-        }
-        __syncthreads();
-    }
-
-    o = by*COPY_BLOCK_SIZE*n + ty*n + bx*COPY_BLOCK_SIZE + tx;
-    target[o] = sqrtf(s);
-}
