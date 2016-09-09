@@ -92,7 +92,6 @@ _cudamat.selectRows.restype = ct.c_int
 _cudamat.setSelectedRows.restype = ct.c_int
 _cudamat.vdot.restype = ct.c_float
 _cudamat.dot.restype = ct.c_int
-_cudamat.pdist.restype = ct.c_int
 _cudamat.sparse_dot.restype = ct.c_int
 
 
@@ -1311,18 +1310,6 @@ def sparse_dot(sparse_mat, dense_mat, mult=1.0, target = None):
         target = empty((m, n))
 
     err_code = _cudamat.sparse_dot(sparse_mat.p_mat, dense_mat.p_mat, target.p_mat, ct.c_float(0.), ct.c_float(mult))
-    if err_code:
-        raise generate_exception(err_code)
-
-    return target
-
-def pdist(mat, target=None):
-    if not target:
-        n = mat.shape[0]
-        m = mat.shape[1]
-        target = empty((n, n))
-
-    err_code = _cudamat.pdist(mat.p_mat, target.p_mat)
     if err_code:
         raise generate_exception(err_code)
 

@@ -89,5 +89,4 @@ __global__ void kAddScalar(float* a, float alpha, float* dest, unsigned int numE
 __global__ void kSelectRows(float* source, float* target, float* indices, int nRowIs, int nCols, int nSourceRows);
 __global__ void kSetSelectedRows(float* target, float* source, float* indices, int nRowIs, int nCols, int nTargetRows);
 __global__ void kWhere(float* condition_mat, float* if_mat, float* else_mat, float* target, unsigned int len);
-__global__ void kPdist(float* source, float* target, int n, int m);
 #endif

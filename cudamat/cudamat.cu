@@ -483,30 +483,6 @@ EXPORT int add_col_vec(cudamat* mat, cudamat* vec, cudamat* target) {
 }
 
 
-EXPORT int pdist(cudamat* source, cudamat* target) {
-    int n  = source->size[0],
-        m  = source->size[1];
-
-    if (!source->on_device || !target->on_device)
-        return ERROR_NOT_ON_DEVICE;
-
-    if (source->is_trans)
-        return ERROR_TRANSPOSED;
-
-    unsigned int grid_x = n / COPY_BLOCK_SIZE;
-
-    dim3 grid(grid_x,  grid_x);
-    dim3 blockDim(COPY_BLOCK_SIZE, COPY_BLOCK_SIZE);
-
-    kPdist<<<grid, blockDim>>>(source->data_device, target->data_device, n, m);
-
-    if (check_cublas_error())
-        return CUBLAS_ERROR;
-
-    return 0;
-}
-
-
 EXPORT int add_col_mult(cudamat* mat, cudamat* vec, cudamat* target, float mult) {
     unsigned int h = mat->size[0],
                  w = mat->size[1];
